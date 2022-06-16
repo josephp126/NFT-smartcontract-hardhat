@@ -13,21 +13,24 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
  */
 
-contract Sekai is ERC721A, Ownable, ReentrancyGuard {
+contract Frown is ERC721A, Ownable, ReentrancyGuard {
     using ECDSA for bytes32;
 
+    mapping(address => uint256) public numberOfGEMintsOnAddress;
     mapping(address => uint256) public numberOfWLMintsOnAddress;
     mapping(address => uint256) public numberOfOGMintsOnAddress;
     mapping(address => uint256) public totalClaimed;
     mapping(address => uint256) public airdropList;
 
     //Sale flags
+    bool public GEsaleActive = false;
     bool public OGsaleActive = false;
     bool public WLsaleActive = false;
     bool public saleActive = false;
 
     //Mint limits
     uint256 public ADDRESS_MAX_MINTS = 12;
+    uint256 public ADDRESS_GE_MAX_MINTS = 3;
     uint256 public ADDRESS_OG_MAX_MINTS = 3;
     uint256 public ADDRESS_WL_MAX_MINTS = 3;
     uint256 public PUBLIC_MINT_PER_TX = 12;
@@ -36,6 +39,7 @@ contract Sekai is ERC721A, Ownable, ReentrancyGuard {
     uint256 public maxSupply;
 
     //Pricing
+    uint256 public GEprice = 0.08 ether;
     uint256 public OGprice = 0.08 ether;
     uint256 public WLprice = 0.12 ether;
     uint256 public price = 0.18 ether;
@@ -44,19 +48,13 @@ contract Sekai is ERC721A, Ownable, ReentrancyGuard {
     string private _baseTokenURI = ""; //naming of this seems off?
 
     //Merkle roots
+    bytes32 public GEMerkleRoot =
+        0x5ca83a030c01fd6b97579c236835bf3c16ab8ee596f5986d9203ac3c5a37e8f6;
     bytes32 public OGMerkleRoot =
         0x5ca83a030c01fd6b97579c236835bf3c16ab8ee596f5986d9203ac3c5a37e8f6;
     bytes32 public WLMerkleRoot =
         0xb962a1d6a53354253b8d3eb626122ca11c747cab1d3f6bdb1395b26359cbb7bc;
     //	bytes32 private freeClaim; //why private ?
-
-    //Payable addresses
-    address private constant AA_ADDRESS =
-        0x9bB755DcD634bE970E80f9643ad229a196448878; //why private?
-    address private constant BB_ADDRESS =
-        0xDAb2d32Ca6a726f46E4aF1624930c3f1fE07765f;
-    address private constant CC_ADDRESS =
-        0x640886117801F6fD8ABBCee14CE568dadb53AEa6;
 
     event Claimed(uint256 count, address sender);
     //	event FreeClaimActive(bool live);
@@ -64,6 +62,50 @@ contract Sekai is ERC721A, Ownable, ReentrancyGuard {
     event Airdrop(uint256 count, address sender);
 
     constructor() ERC721A("TXtest", "TXTEST") {}
+
+    /**
+        GE mint
+    **/
+
+    function mintGESale(uint256 numberOfMints, bytes32[] calldata _merkleProof)
+        external
+        payable
+    {
+        require(GEsaleActive, "GE Presale must be active to mint");
+
+        require(
+            MerkleProof.verify(
+                _merkleProof,
+                GEMerkleRoot,
+                keccak256(abi.encodePacked(msg.sender))
+            ),
+            "Invalid OG proof - Caller not on OG whitelisted"
+        );
+
+        require(numberOfMints > 0, "Sender is trying to mint zero token"); //optional: this is a general check for all mint functions that can be factor out into a separate internal mint function
+
+        require(
+            numberMinted(msg.sender) + numberOfMints <= ADDRESS_MAX_MINTS,
+            "Sender is trying to mint more than allocated tokens"
+        ); //optional: this is a general check for all mint functions that can be factor out into a separate internal mint function
+
+        require(
+            numberOfGEMintsOnAddress[msg.sender] + numberOfMints <=
+                ADDRESS_GE_MAX_MINTS,
+            "Sender is trying to mint more than their whitelist amount"
+        );
+        require(
+            totalSupply() + numberOfMints <= maxSupply,
+            "This would exceed the max number of mints allowed"
+        ); //optional: this is a general check for all mint functions that can be factor out into a separate internal mint function
+        require(
+            msg.value >= numberOfMints * GEprice,
+            "Not enough ether to mint"
+        );
+
+        numberOfGEMintsOnAddress[msg.sender] += numberOfMints;
+        _safeMint(msg.sender, numberOfMints);
+    }
 
     /**
      * OG mint
@@ -203,34 +245,50 @@ contract Sekai is ERC721A, Ownable, ReentrancyGuard {
     }
 
     //SETTERS FOR SALE PHASES
+    function setOnlyGE() public onlyOwner {
+        GEsaleActive = true;
+        OGsaleActive = false;
+        WLsaleActive = false;
+        saleActive = false;
+    }
+
     function setOnlyOG() public onlyOwner {
         OGsaleActive = true;
+        GEsaleActive = false;
         WLsaleActive = false;
         saleActive = false;
     }
 
     function setOnlyWhitelisted() public onlyOwner {
+        GEsaleActive = false;
         OGsaleActive = false;
         WLsaleActive = true;
         saleActive = false;
     }
 
     function setOnlyPublicSale() public onlyOwner {
+        GEsaleActive = false;
         OGsaleActive = false;
         WLsaleActive = false;
         saleActive = true;
     }
 
     function toggleSaleOff() external onlyOwner {
+        GEsaleActive = false;
         OGsaleActive = false;
         WLsaleActive = false;
         saleActive = false;
     }
 
     function toggleAllsaleOn() external onlyOwner {
+        GEsaleActive = true;
         OGsaleActive = true;
         WLsaleActive = true;
         saleActive = true;
+    }
+
+    function setGEMerkleRoot(bytes32 newMerkleRoot) external onlyOwner {
+        GEMerkleRoot = newMerkleRoot;
     }
 
     function setOGMerkleRoot(bytes32 newMerkleRoot) external onlyOwner {
@@ -248,15 +306,6 @@ contract Sekai is ERC721A, Ownable, ReentrancyGuard {
     {
         bytes32 leaf = keccak256(abi.encodePacked(_user));
         return MerkleProof.verify(_merkleProof, WLMerkleRoot, leaf); //this seems to be duplicate
-    }
-
-    function withdraw() external onlyOwner nonReentrant {
-        require(address(this).balance > 0, "No balance to withdraw");
-        uint256 contractBalance = address(this).balance;
-
-        _withdraw(AA_ADDRESS, (contractBalance * 19) / 100);
-        _withdraw(BB_ADDRESS, (contractBalance * 19) / 100);
-        _withdraw(CC_ADDRESS, (contractBalance));
     }
 
     function _withdraw(address _address, uint256 _amount) private {
@@ -321,6 +370,10 @@ contract Sekai is ERC721A, Ownable, ReentrancyGuard {
     }
 
     //set public mint price
+    function setGEprice(uint256 _new) external onlyOwner {
+        GEprice = _new;
+    }
+
     function setOGprice(uint256 _new) external onlyOwner {
         OGprice = _new;
     }
@@ -335,6 +388,10 @@ contract Sekai is ERC721A, Ownable, ReentrancyGuard {
 
     function setMaxAddress(uint256 _new) external onlyOwner {
         ADDRESS_MAX_MINTS = _new;
+    }
+
+    function setGEMax(uint256 _new) external onlyOwner {
+        ADDRESS_GE_MAX_MINTS = _new;
     }
 
     function setOGMax(uint256 _new) external onlyOwner {

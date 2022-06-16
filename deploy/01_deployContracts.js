@@ -1,5 +1,6 @@
 const { network } = require("hardhat");
 module.exports = async ({ getNamedAccounts, deployments }) => {
+  console.log("deploy contract")
   const { deploy } = deployments;
   const { deployer } = await getNamedAccounts();
 
@@ -9,4 +10,5 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     args: [],
   });
 };
+
 module.exports.tags = ["all", "TXtest"];
